@@ -44,7 +44,9 @@
         "esri/rest/support/FeatureSet",
         "esri/Graphic",
         "esri/widgets/ScaleBar",
-        "esri/layers/FeatureLayer"
+        "esri/layers/FeatureLayer",
+        "esri/widgets/LayerList",
+        "esri/widgets/Locate"
       ], function (
         esriConfig,
         Map,
@@ -55,7 +57,9 @@
         FeatureSet,
         Graphic,
         ScaleBar,
-        FeatureLayer
+        FeatureLayer,
+        LayerList,
+        Locate
       ) {
         esriConfig.apiKey =
           "AAPKa706d18d6c6544cdaa4f7c96dd309c72iyX0J4PvCp3K13GZeHhOl-acWns6EFhfoOr2HY0ghLdtd3osENUGrckZjhcwztAf";
@@ -68,11 +72,12 @@
         });
 
         let networkDescription = null;
-        
-         const rutapau = new FeatureLayer({
-        url: "https://spgis.sigsa.info/server/rest/services/Map4/MapServer/6",
-        title: "RedNA",
-        opacity: 0.8
+
+        // Capa de Red
+        const rutapau = new FeatureLayer({
+          url: "https://spgis.sigsa.info/server/rest/services/Map4/MapServer/6",
+          title: "RedNA",
+          opacity: 0.8
         });
         map.add(rutapau);
 
@@ -84,24 +89,31 @@
           constraints: { snapToZoom: false }
         });
 
-        Promise.all([
-          view.when(),
-          networkService.fetchServiceDescription(url)
-        ]).then(function (results) {
-          networkDescription = results[1];
+        Promise.all([view.when(), networkService.fetchServiceDescription(url)]).then(
+          function (results) {
+            networkDescription = results[1];
 
-          // Widget escala
-          view.ui.add(new ScaleBar({ view, style: "line" }), "bottom-right");
+            // Escala
+            view.ui.add(new ScaleBar({ view, style: "line" }), "bottom-right");
 
-          // Opciones UI
-          const optionsDiv = document.getElementById("optionsContainer");
-          view.ui.add(optionsDiv, "top-right");
+            // Opciones de áreas
+            const optionsDiv = document.getElementById("optionsContainer");
+            view.ui.add(optionsDiv, "top-right");
 
-          // Al hacer clic → genera áreas de servicio
-          view.on("click", function (event) {
-            createServiceAreas(event.mapPoint);
-          });
-        });
+            // Layer List para prender/apagar
+            const layerList = new LayerList({ view });
+            view.ui.add(layerList, "top-left");
+
+            // Localizar mi ubicación
+            const locateWidget = new Locate({ view });
+            view.ui.add(locateWidget, "top-left");
+
+            // Al hacer clic → generar áreas de servicio
+            view.on("click", function (event) {
+              createServiceAreas(event.mapPoint);
+            });
+          }
+        );
 
         async function createServiceAreas(point) {
           const locationGraphic = createLocationGraphic(point);
@@ -122,7 +134,6 @@
         }
 
         async function createServiceAreaParameters(locationGraphic) {
-          // default: Driving Time
           const travelMode = networkDescription.supportedTravelModes.find(
             (tm) => tm.name === "Driving Time"
           );
@@ -131,14 +142,14 @@
             features: [locationGraphic]
           });
 
-          // ✅ Leer qué checkboxes están seleccionados
+          // Leer los checkboxes
           const selectedBreaks = Array.from(
             document.querySelectorAll("input[name='breaks']:checked")
           ).map((cb) => Number(cb.value));
 
           return new ServiceAreaParameters({
             facilities,
-            defaultBreaks: selectedBreaks.length ? selectedBreaks : [5], // fallback a 5 si nada está seleccionado
+            defaultBreaks: selectedBreaks.length ? selectedBreaks : [5],
             travelMode,
             outSpatialReference: view.spatialReference,
             trimOuterPolygon: true
