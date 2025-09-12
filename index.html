@@ -1,0 +1,177 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="initial-scale=1, maximum-scale=1, user-scalable=no"
+    />
+    <title>Service Areas CDMX - con opciones</title>
+    <style>
+      html,
+      body,
+      #viewDiv {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+      }
+      .options-container {
+        background: white;
+        padding: 8px;
+        border-radius: 6px;
+        font-family: sans-serif;
+        font-size: 14px;
+      }
+      .options-container label {
+        margin-right: 8px;
+      }
+    </style>
+
+    <link
+      rel="stylesheet"
+      href="https://js.arcgis.com/4.32/esri/themes/light/main.css"
+    />
+    <script src="https://js.arcgis.com/4.32/"></script>
+
+    <script>
+      require([
+        "esri/config",
+        "esri/Map",
+        "esri/views/MapView",
+        "esri/rest/networkService",
+        "esri/rest/serviceArea",
+        "esri/rest/support/ServiceAreaParameters",
+        "esri/rest/support/FeatureSet",
+        "esri/Graphic",
+        "esri/widgets/ScaleBar"
+      ], function (
+        esriConfig,
+        Map,
+        MapView,
+        networkService,
+        serviceArea,
+        ServiceAreaParameters,
+        FeatureSet,
+        Graphic,
+        ScaleBar
+      ) {
+        esriConfig.apiKey =
+          "AAPKa706d18d6c6544cdaa4f7c96dd309c72iyX0J4PvCp3K13GZeHhOl-acWns6EFhfoOr2HY0ghLdtd3osENUGrckZjhcwztAf";
+
+        const url =
+          "https://spgis.sigsa.info/server/rest/services/Version/Rutas/NAServer/Service%20Area";
+
+        const map = new Map({
+          basemap: "arcgis/navigation"
+        });
+
+        let networkDescription = null;
+
+        const view = new MapView({
+          container: "viewDiv",
+          map,
+          center: [-99.1332, 19.4326], // CDMX
+          zoom: 11,
+          constraints: { snapToZoom: false }
+        });
+
+        Promise.all([
+          view.when(),
+          networkService.fetchServiceDescription(url)
+        ]).then(function (results) {
+          networkDescription = results[1];
+
+          // Widget escala
+          view.ui.add(new ScaleBar({ view, style: "line" }), "bottom-right");
+
+          // Opciones UI
+          const optionsDiv = document.getElementById("optionsContainer");
+          view.ui.add(optionsDiv, "top-right");
+
+          // Al hacer clic → genera áreas de servicio
+          view.on("click", function (event) {
+            createServiceAreas(event.mapPoint);
+          });
+        });
+
+        async function createServiceAreas(point) {
+          const locationGraphic = createLocationGraphic(point);
+          const serviceAreaParams = await createServiceAreaParameters(
+            locationGraphic
+          );
+          executeServiceAreaTask(serviceAreaParams);
+        }
+
+        function createLocationGraphic(point) {
+          view.graphics.removeAll();
+          const graphic = new Graphic({
+            geometry: point,
+            symbol: { type: "simple-marker", color: "white", size: 8 }
+          });
+          view.graphics.add(graphic);
+          return graphic;
+        }
+
+        async function createServiceAreaParameters(locationGraphic) {
+          // default: Driving Time
+          const travelMode = networkDescription.supportedTravelModes.find(
+            (tm) => tm.name === "Driving Time"
+          );
+
+          const facilities = new FeatureSet({
+            features: [locationGraphic]
+          });
+
+          // ✅ Leer qué checkboxes están seleccionados
+          const selectedBreaks = Array.from(
+            document.querySelectorAll("input[name='breaks']:checked")
+          ).map((cb) => Number(cb.value));
+
+          return new ServiceAreaParameters({
+            facilities,
+            defaultBreaks: selectedBreaks.length ? selectedBreaks : [5], // fallback a 5 si nada está seleccionado
+            travelMode,
+            outSpatialReference: view.spatialReference,
+            trimOuterPolygon: true
+          });
+        }
+
+        async function executeServiceAreaTask(serviceAreaParameters) {
+          const result = await serviceArea.solve(url, serviceAreaParameters);
+          const colors = {
+            5: [0, 150, 255, 0.4],
+            10: [0, 200, 100, 0.4],
+            15: [225, 150, 0, 0.4]
+          };
+
+          const saGraphics = result.serviceAreaPolygons.features.map(function (
+            g
+          ) {
+            const minutes = g.attributes.ToBreak;
+            g.symbol = {
+              type: "simple-fill",
+              color: colors[minutes] || [200, 0, 200, 0.4],
+              outline: { color: "white", width: 0.5 }
+            };
+            return g;
+          });
+          view.graphics.addMany(saGraphics, 0);
+        }
+      });
+    </script>
+  </head>
+
+  <body>
+    <div id="viewDiv"></div>
+    <div
+      id="optionsContainer"
+      class="esri-widget options-container"
+      style="box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3)"
+    >
+      <strong>Áreas de servicio (minutos):</strong><br />
+      <label><input type="checkbox" name="breaks" value="5" checked /> 5</label>
+      <label><input type="checkbox" name="breaks" value="10" checked /> 10</label>
+      <label><input type="checkbox" name="breaks" value="15" checked /> 15</label>
+    </div>
+  </body>
+</html>
