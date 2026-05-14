@@ -6,6 +6,7 @@
       content="initial-scale=1, maximum-scale=1, user-scalable=no"
     />
     <title>Service Areas CDMX - con opciones</title>
+
     <style>
       html,
       body,
@@ -15,6 +16,7 @@
         height: 100%;
         width: 100%;
       }
+
       .options-container {
         background: white;
         padding: 8px;
@@ -22,6 +24,7 @@
         font-family: sans-serif;
         font-size: 14px;
       }
+
       .options-container label {
         margin-right: 8px;
       }
@@ -46,7 +49,10 @@
         "esri/widgets/ScaleBar",
         "esri/layers/FeatureLayer",
         "esri/widgets/LayerList",
-        "esri/widgets/Locate"
+        "esri/widgets/Locate",
+        "esri/widgets/BasemapGallery",
+        "esri/widgets/Expand",
+        "esri/portal/Portal"
       ], function (
         esriConfig,
         Map,
@@ -59,7 +65,10 @@
         ScaleBar,
         FeatureLayer,
         LayerList,
-        Locate
+        Locate,
+        BasemapGallery,
+        Expand,
+        Portal
       ) {
         esriConfig.apiKey =
           "axZTBFQLdTUVrZeBShQjr6A..QXhUhP1lV3ToX131wQGStoZ0DtyNNl9zQsS3pBg9hJBKc0EFYzA6dxxecrbPCQd4A9AHerJuk7NNGAkwU8S5KyR00I0vqE1eJNDPUyzAKbsDuNc3osOcPMrsnZjUFJa8cwkiTssKZA6AJVcu3wf3S8x7vhu9Z8m6KfhuJv9pAmAadK6Zea8fk78MZExAbv44VA..";
@@ -107,6 +116,28 @@
             // Localizar mi ubicación
             const locateWidget = new Locate({ view });
             view.ui.add(locateWidget, "top-left");
+
+            // ---------------------------
+            // ✅ CAMBIADOR DE MAPAS BASE
+            // ---------------------------
+            const portal = new Portal({
+              url: "https://www.arcgis.com"
+            });
+
+            const basemapGallery = new BasemapGallery({
+              view: view,
+              source: {
+                portal: portal
+              }
+            });
+
+            const basemapExpand = new Expand({
+              view: view,
+              content: basemapGallery,
+              expanded: false
+            });
+
+            view.ui.add(basemapExpand, "top-left");
 
             // Al hacer clic → generar áreas de servicio
             view.on("click", function (event) {
@@ -158,15 +189,14 @@
 
         async function executeServiceAreaTask(serviceAreaParameters) {
           const result = await serviceArea.solve(url, serviceAreaParameters);
+
           const colors = {
             5: [0, 150, 255, 0.4],
             10: [0, 200, 100, 0.4],
             15: [225, 150, 0, 0.4]
           };
 
-          const saGraphics = result.serviceAreaPolygons.features.map(function (
-            g
-          ) {
+          const saGraphics = result.serviceAreaPolygons.features.map(function (g) {
             const minutes = g.attributes.ToBreak;
             g.symbol = {
               type: "simple-fill",
@@ -175,6 +205,7 @@
             };
             return g;
           });
+
           view.graphics.addMany(saGraphics, 0);
         }
       });
@@ -183,6 +214,7 @@
 
   <body>
     <div id="viewDiv"></div>
+
     <div
       id="optionsContainer"
       class="esri-widget options-container"
